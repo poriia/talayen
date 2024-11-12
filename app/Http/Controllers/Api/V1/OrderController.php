@@ -7,15 +7,19 @@ use App\Models\Order;
 use App\DTOs\OrderDTO;
 use App\DTOs\CancelOrderDTO;
 use App\Exceptions\OrderException;
-use App\Http\Controllers\Controller;
+use App\DTOs\TransactionRequestDTO;
 use App\Http\Requests\OrderBuyRequest;
 use App\Http\Requests\OrderSellRequest;
+use App\Http\Resources\TransactionResource;
+use App\Http\Controllers\Api\ApiBaseController;
 use App\Services\Interfaces\OrderServiceInterface;
+use App\Services\Interfaces\TransactionServiceInterface;
 
-class OrderController extends Controller
+class OrderController extends ApiBaseController
 {
     public function __construct(
-        protected OrderServiceInterface $orderService
+        protected OrderServiceInterface $orderService,
+        protected TransactionServiceInterface $transactionService
     ) {}
 
     public function buy(OrderBuyRequest $request)
@@ -61,5 +65,26 @@ class OrderController extends Controller
     {
         $orders = Order::where('user_id', auth()->user())->get();
         return response()->json($orders, 200);
+    }
+
+    public function transactions()
+    {
+        try {
+            $transactionRequestDTO = new TransactionRequestDTO([
+                'userId' => auth()->id()
+            ]);
+
+            $transactions = $this->transactionService->getUserTransactions($transactionRequestDTO->userId);
+            return TransactionResource::collection($transactions)->additional([
+                'meta' => [
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                ],
+            ]);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'خطایی رخ داده است'], 500);
+        }
     }
 }
