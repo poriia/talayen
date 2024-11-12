@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\OrderController;
 
 Route::prefix('/v1')->group(function () {
     Route::post('/login', function (Request $request) {
@@ -24,6 +25,12 @@ Route::prefix('/v1')->group(function () {
             $request->user()->currentAccessToken()->delete();
 
             return response()->json(['success' => 'logout successfully'], 200);
+        });
+        
+        Route::prefix('/orders')->group(function () {
+            Route::post('/buy', [OrderController::class, 'buy']);
+            Route::post('/sell', [OrderController::class, 'sell']);
+            Route::post('cancel/{id}', [OrderController::class, 'cancel']);
         });
     });
 });
