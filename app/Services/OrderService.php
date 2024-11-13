@@ -1,53 +1,43 @@
 <?php
+
 namespace App\Services;
 
-use App\Models\Order;
+use App\DTOs\OrderDTO;
 use App\Models\User;
+use App\Models\Order;
 use App\Models\Transaction;
 use App\Tools\FeeCalculator;
 use App\Exceptions\OrderException;
+use App\Factories\OrderTypeHandlerFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use App\Services\Interfaces\OrderServiceInterface;
 
 class OrderService implements OrderServiceInterface
 {
-
-    public function __construct(protected OrderServiceInterface $orderService) {}
-
     public function createOrder(array $data, string $type, int $userId): Order
     {
-        return DB::transaction(function () use ($data, $type, $userId) {
+        $orderDTO = new OrderDTO($data);
+        $handler = OrderTypeHandlerFactory::getHandler($type);
+
+        return DB::transaction(function () use ($orderDTO, $handler, $type, $userId) {
             $user = User::findOrFail($userId);
 
-            if ($type === 'buy') {
-                $totalPrice = $data['amount'] * $data['price'];
-                if ($user->balance < $totalPrice) {
-                    throw new \Exception('موجودی کافی نیست');
-                }
-                $user->balance -= $totalPrice;
-            } elseif ($type === 'sell') {
-                if ($user->balance < $data['amount']) {
-                    throw new \Exception('موجودی کافی نیست');
-                }
-                $user->balance -= $data['amount'];
-            } else {
-                throw new \Exception('نوع سفارش نامعتبر است');
-            }
-
+            $handler->validate($user, $orderDTO);
+            $handler->deductBalance($user, $orderDTO);
             $user->save();
 
             $order = Order::create([
                 'user_id' => $user->id,
                 'type' => $type,
-                'amount' => $data['amount'],
-                'price' => $data['price'],
-                'remaining_amount' => $data['amount'],
+                'amount' => $orderDTO->amount,
+                'price' => $orderDTO->price,
+                'remaining_amount' => $orderDTO->amount,
                 'status' => 'open',
             ]);
 
             $redisKey = $type === 'buy' ? 'buy_orders' : 'sell_orders';
-            $score = $type === 'buy' ? -$data['price'] : $data['price'];
+            $score = $type === 'buy' ? -$orderDTO->price : $orderDTO->price;
             Redis::zadd($redisKey, $score, $order->id);
 
             $this->processOrders();

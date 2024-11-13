@@ -14,7 +14,7 @@ class OrderSellRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'quantity' => 'required|numeric|min:0.001',
+            'amount' => 'required|numeric|min:0.001',
             'price' => 'required|numeric|min:1',
         ];
     }
